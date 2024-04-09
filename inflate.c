@@ -1513,9 +1513,9 @@ long ZEXPORT inflateMark(z_streamp strm) {
     if (inflateStateCheck(strm))
         return -(1L << 16);
     state = (struct inflate_state FAR *)strm->state;
-    return (long)(((unsigned long)((long)state->back)) << 16) +
+    return (long)((((unsigned long)((long)state->back)) << 16) +
         (state->mode == COPY ? state->length :
-            (state->mode == MATCH ? state->was - state->length : 0));
+            (state->mode == MATCH ? state->was - state->length : 0)));
 }
 
 unsigned long ZEXPORT inflateCodesUsed(z_streamp strm) {

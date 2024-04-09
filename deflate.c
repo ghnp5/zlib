@@ -772,7 +772,7 @@ int ZEXPORT deflateParams(z_streamp strm, int level, int strategy) {
         int err = deflate(strm, Z_BLOCK);
         if (err == Z_STREAM_ERROR)
             return err;
-        if (strm->avail_in || (s->strstart - s->block_start) + s->lookahead)
+        if (strm->avail_in || (s->strstart - (unsigned)s->block_start) + s->lookahead)
             return Z_BUF_ERROR;
     }
     if (s->level != level) {
@@ -1592,7 +1592,7 @@ local void check_match(deflate_state *s, IPos start, IPos match, int length) {
                    (charf *)Z_NULL), \
                 (ulg)((long)s->strstart - s->block_start), \
                 (last)); \
-   s->block_start = s->strstart; \
+   s->block_start = (long)s->strstart; \
    flush_pending(s->strm); \
    Tracev((stderr,"[FLUSH]")); \
 }
@@ -1643,12 +1643,12 @@ local block_state deflate_stored(deflate_state *s, int flush) {
          * would be copied from what's left in the window.
          */
         len = MAX_STORED;       /* maximum deflate stored block length */
-        have = (s->bi_valid + 42) >> 3;         /* number of header bytes */
+        have = ((unsigned)s->bi_valid + 42) >> 3;         /* number of header bytes */
         if (s->strm->avail_out < have)          /* need room for header */
             break;
             /* maximum stored block length that will fit in avail_out: */
         have = s->strm->avail_out - have;
-        left = s->strstart - s->block_start;    /* bytes left in window */
+        left = s->strstart - (unsigned)s->block_start;    /* bytes left in window */
         if (len > (ulg)left + s->strm->avail_in)
             len = left + s->strm->avail_in;     /* limit len to the input */
         if (len > have)
@@ -1668,7 +1668,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
          * including any pending bits. This also updates the debugging counts.
          */
         last = flush == Z_FINISH && len == left + s->strm->avail_in ? 1 : 0;
-        _tr_stored_block(s, (char *)0, 0L, last);
+        _tr_stored_block(s, (char *)0, 0L, (int)last);
 
         /* Replace the lengths in the dummy stored block with len. */
         s->pending_buf[s->pending - 4] = len;
@@ -1739,7 +1739,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
             s->strstart += used;
             s->insert += MIN(used, s->w_size - s->insert);
         }
-        s->block_start = s->strstart;
+        s->block_start = (long)s->strstart;
     }
     if (s->high_water < s->strstart)
         s->high_water = s->strstart;
@@ -1781,18 +1781,18 @@ local block_state deflate_stored(deflate_state *s, int flush) {
      * have enough input for a worthy block, or if flushing and there is enough
      * room for the remaining input as a stored block in the pending buffer.
      */
-    have = (s->bi_valid + 42) >> 3;         /* number of header bytes */
+    have = ((unsigned)s->bi_valid + 42) >> 3;         /* number of header bytes */
         /* maximum stored block length that will fit in pending: */
     have = MIN(s->pending_buf_size - have, MAX_STORED);
     min_block = MIN(have, s->w_size);
-    left = s->strstart - s->block_start;
+    left = s->strstart - (unsigned)s->block_start;
     if (left >= min_block ||
         ((left || flush == Z_FINISH) && flush != Z_NO_FLUSH &&
          s->strm->avail_in == 0 && left <= have)) {
         len = MIN(left, have);
         last = flush == Z_FINISH && s->strm->avail_in == 0 &&
                len == left ? 1 : 0;
-        _tr_stored_block(s, (charf *)s->window + s->block_start, len, last);
+        _tr_stored_block(s, (charf *)s->window + s->block_start, len, (int)last);
         s->block_start += len;
         flush_pending(s->strm);
     }
