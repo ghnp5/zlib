@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../README" Pack="true" PackagePath="" />
     <!-- Package up Windows builds. -->
     <None Condition="$([MSBuild]::IsOSPlatform('Windows'))" Include="../vstudio/vc17/x86/ZlibDll$(Configuration)/zlibwapi.dll" Pack="true" PackagePath="runtimes/win-x86/native" />
     <None Condition="$([MSBuild]::IsOSPlatform('Windows'))" Include="../vstudio/vc17/x64/ZlibDll$(Configuration)/zlibwapi.dll" Pack="true" PackagePath="runtimes/win-x64/native" />
