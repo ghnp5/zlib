@@ -43,7 +43,7 @@ Build instructions for Visual Studio 2015 (32 bits or 64 bits)
 Build instructions for Visual Studio 2022 (64 bits)
 --------------------------------------------------------------
 - Decompress current zlib, including all contrib/* files
-- Open contrib\vstudio\vc143\zlibvc.sln with Microsoft Visual C++ 2022
+- Open contrib\vstudio\vc17\zlibvc.sln with Microsoft Visual C++ 2022
 
 
 
