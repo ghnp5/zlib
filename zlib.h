@@ -796,8 +796,9 @@ ZEXTERN int ZEXPORT deflateUsed(z_streamp strm,
 /*
      deflateUsed() returns in *bits the most recent number of deflate bits used
    in the last byte when flushing to a byte boundary. The result is in 1..8, or
-   0 if there has not yet been a flush. This helps determine the location of
-   the last bit of a deflate stream.
+   0 if there has not yet been a flush. When compression is disabled, the result
+   includes the additional 5 bits of a stored block needed during the flush.
+   This helps determine the location of the last bit of a deflate stream.
 
      deflateUsed returns Z_OK if success, or Z_STREAM_ERROR if the source
    stream state was inconsistent.

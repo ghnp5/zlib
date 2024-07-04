@@ -185,6 +185,8 @@ local void bi_windup(deflate_state *s) {
         put_byte(s, (Byte)s->bi_buf);
     }
     s->bi_used = ((s->bi_valid - 1) & 7) + 1;
+    if (s->level == 0)
+        s->bi_used += 5; /* forced stored block */
     s->bi_buf = 0;
     s->bi_valid = 0;
 #ifdef ZLIB_DEBUG
