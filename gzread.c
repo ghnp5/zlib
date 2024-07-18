@@ -24,7 +24,7 @@ local int gz_load(gz_statep state, unsigned char *buf, unsigned len,
             break;
         *have += (unsigned)ret;
     } while (*have < len);
-    if (ret < 0) {
+    if (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         gz_error(state, Z_ERRNO, zstrerror());
         return -1;
     }
