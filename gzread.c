@@ -309,8 +309,10 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
            buffer */
         else if (state->how == LOOK || n < (state->size << 1)) {
             /* get more output, looking for header if required */
+            errno = 0;
             if (gz_fetch(state) == -1)
                 return 0;
+            load_errno = errno;
             continue;       /* no progress yet -- go back to copy above */
             /* the copy above assures that we will leave with space in the
                output buffer, allowing at least one gzungetc() to succeed */
@@ -328,8 +330,10 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
         else {  /* state->how == GZIP */
             state->strm.avail_out = n;
             state->strm.next_out = (unsigned char *)buf;
+            errno = 0;
             if (gz_decomp(state) == -1)
                 return 0;
+            load_errno = errno;
             n = state->x.have;
             state->x.have = 0;
         }
