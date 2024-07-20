@@ -268,6 +268,7 @@ local int gz_skip(gz_statep state, z_off64_t len) {
 local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     z_size_t got;
     unsigned n;
+    int load_errno;
 
     /* if len is zero, avoid unnecessary operations */
     if (len == 0)
@@ -283,6 +284,7 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     /* get len bytes to buf, or less than len if at the end */
     got = 0;
     do {
+        load_errno = 0;
         /* set n to the maximum amount of len that fits in an unsigned int */
         n = (unsigned)-1;
         if (n > len)
@@ -316,8 +318,10 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
 
         /* large len -- read directly into user buffer */
         else if (state->how == COPY) {      /* read directly */
+            errno = 0;
             if (gz_load(state, (unsigned char *)buf, n, &n) == -1)
                 return 0;
+            load_errno = errno;
         }
 
         /* large len -- decompress directly into user buffer */
@@ -335,7 +339,7 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
         buf = (char *)buf + n;
         got += n;
         state->x.pos += n;
-    } while (len);
+    } while (len && load_errno != EAGAIN && load_errno != EWOULDBLOCK);
 
     /* return number of bytes read into user buffer */
     return got;
