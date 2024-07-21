@@ -312,7 +312,7 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
             errno = 0;
             if (gz_fetch(state) == -1)
                 return 0;
-            load_errno = errno;
+            if (!state->x.have) { load_errno = errno; }
             continue;       /* no progress yet -- go back to copy above */
             /* the copy above assures that we will leave with space in the
                output buffer, allowing at least one gzungetc() to succeed */
