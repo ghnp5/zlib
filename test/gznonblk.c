@@ -272,7 +272,10 @@ int
 clientmain(int argc, char** argv)
 {
     struct addrinfo hints;
-    struct addrinfo *result, *rp;
+    struct addrinfo *result;
+    struct addrinfo *rp;
+    int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
+    char* serverhost;
     int sfd, s;
     size_t len;
     ssize_t nread;
@@ -280,10 +283,16 @@ clientmain(int argc, char** argv)
     gzFile gzfi = NULL;
     int final_rtn = EXIT_SUCCESS;
 
-    if (argc < 3) {
-        fprintf(stderr, "Client usage: %s host port msg...\n", argv[0]);
+    if (argc < 3 || (argc == 3 && clientfork))
+    {
+        fprintf(stderr, "Client usage: %s <port>%s"
+                        " serverhost msg...\n"
+                      , argv[0], clientfork ? " --client-fork" : ""
+               );
         return EXIT_FAILURE;
     }
+
+    serverhost = clientfork ? argv[3] : argv[2];
 
     /* Obtain address(es) matching host/port */
 
@@ -298,7 +307,7 @@ clientmain(int argc, char** argv)
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
-    s = getaddrinfo(argv[1], argv[2], &hints, &result);
+    s = getaddrinfo(serverhost, argv[1], &hints, &result);
     if (s != 0) {
         fprintf(stderr, "Client getaddrinfo failed: %s\n", gai_strerror(s));
         return EXIT_FAILURE;
@@ -339,23 +348,26 @@ clientmain(int argc, char** argv)
 
     /* Send remaining command-line arguments as separate writes */
 
-    for (int j = 3; final_rtn == EXIT_SUCCESS && j < argc; j++)
+    for (int iarg = clientfork ? 4 : 3
+        ; final_rtn == EXIT_SUCCESS && iarg < argc
+        ; ++iarg
+        )
     {
         int rtn;
         int itmp;
         int save_errno;
 
-        len = strlen(argv[j]) + 1;    /* +1 for terminating null byte */
+        len = strlen(argv[iarg]) + 1; /* +1 for terminating null byte */
 
         if (len > BUF_SIZE)
         {
             fprintf(stderr,  "Client Ignoring long message"
-                             " in argument %d\n", j
+                             " in argument %d\n", iarg
                    );
             continue;
         }
 
-        if (!strcmp(argv[j],"--delay"))
+        if (!strcmp(argv[iarg],"--delay"))
         {
             struct timeval tv;
             tv = tvfixed;
@@ -364,7 +376,7 @@ clientmain(int argc, char** argv)
         }
 
         errno = 0;
-        if ((rtn=gzwrite(gzfi, argv[j], len)) != len)
+        if ((rtn=gzwrite(gzfi, argv[iarg], len)) != len)
         {
             save_errno = errno;
             fprintf(stderr, "Client partial/failed %d=gzwrite[%s]"
@@ -388,10 +400,10 @@ clientmain(int argc, char** argv)
             final_rtn = EXIT_FAILURE;
             continue;
         }
-    } // for (int j = 3; j < argc; j++)
+    } // for (int iarg = ...; ...; ++iarg)
 
     gzflush(gzfi, Z_FINISH);
-    //gzclose(gzfi);
+    gzclose(gzfi);
 
     return final_rtn;
 }
@@ -399,6 +411,51 @@ clientmain(int argc, char** argv)
 int
 main(int argc, char** argv)
 {
-  if (argc < 3) { return servermain(argc, argv); }
-  return clientmain(argc, argv);
+  /* Usage:
+   *   gznonblock portnum[[ --client-fork] 127.0.0.1|serverhost[ message1|--delay[ message2|--delay[...]]]]
+   *
+   * where
+   *            portnum = port number where server will be listening
+   *      --client-fork = directive to run server and fork client
+   *     127...|...host = hostname of server for client to use
+   *   messageN|--delay = client messages to send or delays between them
+   *
+   * Examples:
+   *
+   *   gznonblock 4444
+   *   - Start server only, listening on port 4444
+   *
+   *   gznonblock 4444 srvrhst message1 --delay message2 message3
+   *   - Start client only, connect to server at port 4444 on srvrhost
+   *     - Client
+   *       - sends "message1"
+   *       - delays
+   *       - sends "message2" and "message3"
+   *
+   *   gznonblock 4444 --client-fork 127.0.0.1 msg1 --delay -stopserver-
+   *   - Fork client, connect to server at port 4444 on 127.0.0.1
+   *     - Client
+   *       - delays for server to start (forced when forking client)
+   *       - sends "msg1"
+   *       - delays
+   *       - sends "-stopserver-"
+   *         - which stops server
+   *   - Start server, listening on port 4444
+   */
+  int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
+  if (argc > 2 && !clientfork) { return clientmain(argc, argv); }
+  if (clientfork)
+  {
+       pid_t pid = fork();
+       if (pid < 0)
+       {
+           fprintf(stderr, "Server %d=fork() of client failed"
+                           "; %d=errno[%s]"
+                         , pid, errno, strerror(errno)
+                  );
+           return EXIT_FAILURE;
+       }
+       if (pid) { return clientmain(argc, argv); }
+  }
+  if (argc == 2 || clientfork) { return servermain(2, argv); }
 }
