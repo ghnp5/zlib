@@ -38,7 +38,8 @@ servermain(int argc, char** argv)
     struct addrinfo *rp;
     int listenfd;
     int sfd;
-    int s;
+    int rtn;
+    int stopserver = 0;
     struct sockaddr_storage peer_addr;
     socklen_t peerlen = sizeof peer_addr;
     ssize_t nread;
@@ -64,9 +65,9 @@ servermain(int argc, char** argv)
     hints.ai_next = NULL;
 
     /* Get address info:  NULL => server; argv[1] is the port */
-    s = getaddrinfo(NULL, argv[1], &hints, &result);
-    if (s != 0) {
-        fprintf(stderr, "Server getaddrinfo failed: %s\n", gai_strerror(s));
+    rtn = getaddrinfo(NULL, argv[1], &hints, &result);
+    if (rtn != 0) {
+        fprintf(stderr, "Server getaddrinfo failed: %s\n", gai_strerror(rtn));
         return EXIT_FAILURE;
     }
 
@@ -104,9 +105,8 @@ servermain(int argc, char** argv)
      *
      * zs is the number of consecutive times select(2) returns 0
      */
-    for (int zs = 0;; ++zs)
+    for (int zs = 0; !stopserver; ++zs)
     {
-        int rtn;
         int nfd;
         fd_set rfds;
         struct timeval tv;
@@ -198,6 +198,9 @@ servermain(int argc, char** argv)
             }
             fprintf(stderr, "%s", "]\n");
 
+            stopserver = (rtn == 12 || (rtn == 13 && !buf[12]))
+                      && !strncmp("-stopserver-", buf, 12);
+
             continue;  /* Done with gzread over socket; skip listenfd */
 
         } /* if (gzfi) */
@@ -235,16 +238,16 @@ servermain(int argc, char** argv)
         }
 
         /* Log information about the newly-accepted socket */
-        s = getnameinfo((struct sockaddr *)&peer_addr, peerlen
-                       , host, NI_MAXHOST
-                       , service, NI_MAXSERV, NI_NUMERICSERV);
-        if (s == 0)
+        rtn = getnameinfo((struct sockaddr *)&peer_addr, peerlen
+                         , host, NI_MAXHOST
+                         , service, NI_MAXSERV, NI_NUMERICSERV);
+        if (rtn == 0)
         {
             fprintf(stderr, "Server accepted connection from %s:%s\n", host, service);
         }
         else
         {
-            fprintf(stderr, "Server getnameinfo failed: %s\n", gai_strerror(s));
+            fprintf(stderr, "Server getnameinfo failed: %s\n", gai_strerror(rtn));
         }
 
         /* Open/allocate the gzFile, and set its buffer size */
@@ -263,7 +266,7 @@ servermain(int argc, char** argv)
             sfd = -1;
             continue;
         }
-    } // for (int zs = 0;; ++zs)
+    } // for (int zs = 0; !stopserver; ++zs)
 
     return EXIT_SUCCESS;
 }
@@ -276,7 +279,8 @@ clientmain(int argc, char** argv)
     struct addrinfo *rp;
     int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
     char* serverhost;
-    int sfd, s;
+    int sfd;
+    int rtn;
     size_t len;
     ssize_t nread;
     char buf[BUF_SIZE];
@@ -307,9 +311,9 @@ clientmain(int argc, char** argv)
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
-    s = getaddrinfo(serverhost, argv[1], &hints, &result);
-    if (s != 0) {
-        fprintf(stderr, "Client getaddrinfo failed: %s\n", gai_strerror(s));
+    rtn = getaddrinfo(serverhost, argv[1], &hints, &result);
+    if (!rtn) {
+        fprintf(stderr, "Client getaddrinfo failed: %s\n", gai_strerror(rtn));
         return EXIT_FAILURE;
     }
 
@@ -353,7 +357,6 @@ clientmain(int argc, char** argv)
         ; ++iarg
         )
     {
-        int rtn;
         int itmp;
         int save_errno;
 
@@ -439,7 +442,7 @@ main(int argc, char** argv)
    *       - sends "msg1"
    *       - delays
    *       - sends "-stopserver-"
-   *         - which stops server
+   *         - which will stop server later
    *   - Start server, listening on port 4444
    */
   int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
