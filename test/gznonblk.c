@@ -57,7 +57,7 @@ servermain(int argc, char** argv)
     //hints.ai_family = AF_UNSPEC;       /* Allow IPv4 or IPv6 */
     //hints.ai_family = AF_INET6;                      /* IPv6 */
     hints.ai_family = AF_INET;                         /* IPv4 */
-    hints.ai_socktype = SOCK_STREAM;        /* Datagram socket */
+    hints.ai_socktype = SOCK_STREAM;          /* Stream socket */
     hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
     hints.ai_protocol = 0;                     /* Any protocol */
     hints.ai_canonname = NULL;   /* Server; nobbut else needed */
@@ -66,9 +66,12 @@ servermain(int argc, char** argv)
 
     /* Get address info:  NULL => server; argv[1] is the port */
     rtn = getaddrinfo(NULL, argv[1], &hints, &result);
-    if (rtn != 0) {
-        fprintf(stderr, "Server getaddrinfo failed: %s\n", gai_strerror(rtn));
-        return EXIT_FAILURE;
+    if (rtn) {
+        fprintf(stderr, "Client %d=getaddrinfo(\"%s\",\"%s\",...)"
+                        " failed: %s\n"
+                      , rtn, "<null>", argv[1]
+                      , strerror(errno)
+               );
     }
 
     /* getaddrinfo() returns a list of address structures.
@@ -301,19 +304,24 @@ clientmain(int argc, char** argv)
     /* Obtain address(es) matching host/port */
 
     memset(&hints, 0, sizeof(hints));
-    //hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
-    //hints.ai_family = AF_INET6;      /* Allow IPv4 or IPv6 */
-    hints.ai_family = AF_INET;      /* Allow IPv4 or IPv6 */
-    hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
+    //hints.ai_family = AF_UNSPEC;              /* Allow IPv4 or IPv6 */
+    //hints.ai_family = AF_INET6;                  /* Allow IPv6 only */
+    hints.ai_family = AF_INET;                     /* Allow IPv4 only */
+    hints.ai_socktype = SOCK_STREAM;                 /* Stream socket */
     hints.ai_flags = 0;
-    hints.ai_protocol = 0;          /* Any protocol */
+    hints.ai_protocol = 0;                            /* Any protocol */
     hints.ai_canonname = NULL;
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
+    errno = 0;
     rtn = getaddrinfo(serverhost, argv[1], &hints, &result);
-    if (!rtn) {
-        fprintf(stderr, "Client getaddrinfo failed: %s\n", gai_strerror(rtn));
+    if (rtn) {
+        fprintf(stderr, "Client %d=getaddrinfo(\"%s\",\"%s\",...)"
+                        " failed: %s\n"
+                      , rtn, serverhost, argv[1]
+                      , strerror(errno)
+               );
         return EXIT_FAILURE;
     }
 
@@ -447,18 +455,23 @@ main(int argc, char** argv)
    */
   int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
   if (argc > 2 && !clientfork) { return clientmain(argc, argv); }
+  errno = 0;
   if (clientfork)
   {
        pid_t pid = fork();
        if (pid < 0)
        {
            fprintf(stderr, "Server %d=fork() of client failed"
-                           "; %d=errno[%s]"
+                           "; %d=errno[%s]\n"
                          , pid, errno, strerror(errno)
                   );
            return EXIT_FAILURE;
        }
-       if (pid) { return clientmain(argc, argv); }
+       if (!pid) { return clientmain(argc, argv); }
+       fprintf(stderr, "Server %d=fork()=PID of client succeeded"
+                       "; %d=errno[%s]\n"
+                     , pid, errno, strerror(errno)
+              );
   }
   if (argc == 2 || clientfork) { return servermain(2, argv); }
 }
