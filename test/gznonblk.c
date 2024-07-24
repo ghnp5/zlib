@@ -454,7 +454,7 @@ main(int argc, char** argv)
      *   gznonblock 4444
      *   - Start server only, listening on port 4444
      *
-     *   gznonblock 4444 srvrhst message1 --delay message2 message3
+     *   gznonblock 4444 srvrhost message1 --delay message2 message3
      *   - Start client only, connect to server at port 4444 on srvrhost
      *     - Client
      *       - sends "message1"
