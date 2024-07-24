@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -67,11 +68,12 @@ servermain(int argc, char** argv)
     /* Get address info:  NULL => server; argv[1] is the port */
     rtn = getaddrinfo(NULL, argv[1], &hints, &result);
     if (rtn) {
-        fprintf(stderr, "Client %d=getaddrinfo(\"%s\",\"%s\",...)"
+        fprintf(stderr, "Server %d=getaddrinfo(\"%s\",\"%s\",...)"
                         " failed: %s\n"
                       , rtn, "<null>", argv[1]
-                      , strerror(errno)
+                      , gai_strerror(rtn)
                );
+        return EXIT_FAILURE;
     }
 
     /* getaddrinfo() returns a list of address structures.
@@ -320,7 +322,7 @@ clientmain(int argc, char** argv)
         fprintf(stderr, "Client %d=getaddrinfo(\"%s\",\"%s\",...)"
                         " failed: %s\n"
                       , rtn, serverhost, argv[1]
-                      , strerror(errno)
+                      , gai_strerror(rtn)
                );
         return EXIT_FAILURE;
     }
@@ -366,7 +368,7 @@ clientmain(int argc, char** argv)
         )
     {
         int itmp;
-        int save_errno;
+        int save_err;
 
         len = strlen(argv[iarg]) + 1; /* +1 for terminating null byte */
 
@@ -389,11 +391,11 @@ clientmain(int argc, char** argv)
         errno = 0;
         if ((rtn=gzwrite(gzfi, argv[iarg], len)) != len)
         {
-            save_errno = errno;
+            save_err = errno;
             fprintf(stderr, "Client partial/failed %d=gzwrite[%s]"
                             "; %d=errno[%s]"
                           , rtn, gzerror(gzfi, &itmp)
-                          , save_errno, strerror(save_errno)
+                          , save_err, strerror(save_err)
                    );
             final_rtn = EXIT_FAILURE;
             continue;
@@ -402,11 +404,11 @@ clientmain(int argc, char** argv)
         errno = 0;
         if ((rtn=gzflush(gzfi, Z_SYNC_FLUSH)) != Z_OK)
         {
-            save_errno = errno;
+            save_err = errno;
             fprintf(stderr, "Client partial/failed %d=gzbuffer[%s]"
                             "; %d=errno[%s]"
                           , rtn, gzerror(gzfi, &itmp)
-                          , save_errno, strerror(save_errno)
+                          , save_err, strerror(save_err)
                    );
             final_rtn = EXIT_FAILURE;
             continue;
@@ -422,56 +424,103 @@ clientmain(int argc, char** argv)
 int
 main(int argc, char** argv)
 {
-  /* Usage:
-   *   gznonblock portnum[[ --client-fork] 127.0.0.1|serverhost[ message1|--delay[ message2|--delay[...]]]]
-   *
-   * where
-   *            portnum = port number where server will be listening
-   *      --client-fork = directive to run server and fork client
-   *     127...|...host = hostname of server for client to use
-   *   messageN|--delay = client messages to send or delays between them
-   *
-   * Examples:
-   *
-   *   gznonblock 4444
-   *   - Start server only, listening on port 4444
-   *
-   *   gznonblock 4444 srvrhst message1 --delay message2 message3
-   *   - Start client only, connect to server at port 4444 on srvrhost
-   *     - Client
-   *       - sends "message1"
-   *       - delays
-   *       - sends "message2" and "message3"
-   *
-   *   gznonblock 4444 --client-fork 127.0.0.1 msg1 --delay -stopserver-
-   *   - Fork client, connect to server at port 4444 on 127.0.0.1
-   *     - Client
-   *       - delays for server to start (forced when forking client)
-   *       - sends "msg1"
-   *       - delays
-   *       - sends "-stopserver-"
-   *         - which will stop server later
-   *   - Start server, listening on port 4444
-   */
-  int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
-  if (argc > 2 && !clientfork) { return clientmain(argc, argv); }
-  errno = 0;
-  if (clientfork)
-  {
-       pid_t pid = fork();
-       if (pid < 0)
-       {
-           fprintf(stderr, "Server %d=fork() of client failed"
-                           "; %d=errno[%s]\n"
-                         , pid, errno, strerror(errno)
-                  );
-           return EXIT_FAILURE;
-       }
-       if (!pid) { return clientmain(argc, argv); }
-       fprintf(stderr, "Server %d=fork()=PID of client succeeded"
-                       "; %d=errno[%s]\n"
-                     , pid, errno, strerror(errno)
-              );
-  }
-  if (argc == 2 || clientfork) { return servermain(2, argv); }
+    /* Usage:
+     *   gznonblock portnum[[ --client-fork] 127.0.0.1|serverhost[ message1|--delay[ message2|--delay[...]]]]
+     *
+     * where
+     *            portnum = port number where server will be listening
+     *      --client-fork = directive to run server and fork client
+     *     127...|...host = hostname of server for client to use
+     *   messageN|--delay = client messages to send or delays between them
+     *
+     * Examples:
+     *
+     *   gznonblock 4444
+     *   - Start server only, listening on port 4444
+     *
+     *   gznonblock 4444 srvrhst message1 --delay message2 message3
+     *   - Start client only, connect to server at port 4444 on srvrhost
+     *     - Client
+     *       - sends "message1"
+     *       - delays
+     *       - sends "message2" and "message3"
+     *
+     *   gznonblock 4444 --client-fork 127.0.0.1 msg1 --delay -stopserver-
+     *   - Fork client, connect to server at port 4444 on 127.0.0.1
+     *     - Client
+     *       - delays for server to start (forced when forking client)
+     *       - sends "msg1"
+     *       - delays
+     *       - sends "-stopserver-"
+     *         - which will stop server later
+     *   - Start server, listening on port 4444
+     */
+    int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
+
+    if (argc > 2 && !clientfork) { return clientmain(argc, argv); }
+
+    errno = 0;
+    if (clientfork)
+    {
+        int rtn;
+        pid_t pidwaited;
+        int wstat;
+        int wopts = WNOHANG;
+        struct timeval tv = {3, 0};
+        int badchild = 0;
+
+        pid_t pidforked = fork();
+
+        int save_err = errno;
+
+        if (pidforked < 0)
+        {
+            fprintf(stderr, "Server %d=fork() of client failed"
+                            "; %d=errno[%s]\n"
+                          , pidforked, save_err, strerror(save_err)
+                   );
+            return EXIT_FAILURE;
+        }
+
+        /* Child runs client and exits */
+        if (!pidforked) { return clientmain(argc, argv); }
+
+        /* To here, this is the server */
+        fprintf(stderr, "Server %d=fork()=PID of client succeeded"
+                        "; %d=errno[%s]\n"
+                      , pidforked, save_err, strerror(save_err)
+               );
+
+        rtn = servermain(2, argv);                      /* Run server */
+        select(0, NULL, NULL, NULL, &tv);           /* Wait for child */
+        errno = 0;
+        pidwaited = waitpid(-1, &wstat, wopts);   /* Get child status */
+
+        if (pidwaited < 1)        /* Non-positive return is a failure */
+        {
+            ++badchild;
+            fprintf(stderr, "Server child %d=waitpid(-1,...) failed"
+                            "; %d=errno[%s]\n"
+                          , pidwaited, errno, strerror(errno)
+                   );
+            return EXIT_FAILURE;
+        }
+
+        if (pidwaited != pidforked)   /* Wait PID must match fork PID */
+        {
+            ++badchild;
+            fprintf(stderr, "Server child %d=waitpid(-1,...) not equal"
+                            " to forked pid (%d)\n"
+                          , pidwaited, pidforked
+                   );
+            return EXIT_FAILURE;
+        }
+
+        /* Combine server status and child/client status */
+        return rtn | (WIFEXITED(wstat) ? WEXITSTATUS(wstat) : 1);
+    }
+
+    /* Run server only */
+    if (argc == 2) { return servermain(2, argv); }
+    return -1;
 }
