@@ -81,9 +81,9 @@ staticgznb: gznonblk$(EXE)
 
 check: test
 
-test: all teststatic testshared testgznonblk
+test: all teststatic testshared
 
-teststatic: static
+teststatic: static testgznonblk
 	@TMPST=tmpst_$$; \
 	if echo hello world | ${QEMU_RUN} ./minigzip | ${QEMU_RUN} ./minigzip -d && ${QEMU_RUN} ./example $$TMPST ; then \
 	  echo '		*** zlib test OK ***'; \
