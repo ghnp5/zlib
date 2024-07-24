@@ -437,43 +437,66 @@ clientmain(int argc, char** argv)
     return final_rtn;
 }
 
+int Usage(int argc, char** argv)
+{
+    const char* arrUsage[] =
+    { "Usage:"
+    , "  gznonblk pn[[ --client-fork] srvrhost[ msg1|--delay[ msg2...]]]"
+    , ""
+    , "where"
+    , "            pn = port number where server will be listening"
+    , " --client-fork = directive to run server and fork client"
+    , "      srvrhost = hostname of server for client to use"
+    , "  msgN|--delay = client messages to send or delays between them"
+    , NULL
+    , ""
+    , "Examples:"
+    , ""
+    , "  gznonblk 4444"
+    , "  - Start server only, listening on port 4444"
+    , ""
+    , "  gznonblk 4444 srvrhost message1 --delay message2 message3"
+    , "  - Start client only, connect to server at port 4444 on srvrhost"
+    , "    - Client"
+    , "      - sends \"message1\""
+    , "      - delays"
+    , "      - sends \"message2\" and \"message3\""
+    , ""
+    , "  gznonblk 4444 --client-fork 127.0.0.1 msg1 --delay -stopserver-"
+    , "  - Fork client, connect to server at port 4444 on 127.0.0.1"
+    , "    - Client"
+    , "      - delays for server to start (forced when forking client)"
+    , "      - sends \"msg1\""
+    , "      - delays"
+    , "      - sends \"-stopserver-\""
+    , "        - which will stop server later"
+    , "  - Start server, listening on port 4444"
+    , NULL
+    };
+    int helplong = 0;
+
+    while (--argc)
+    {
+        if (!strcmp(argv[argc], "--help")) { break; }
+        if (!strcmp(argv[argc], "--help-long")) { ++helplong; break; }
+    }
+    if (!argc) { return 0; }
+
+    for (char** p=(char**)arrUsage; helplong || *p; ++p)
+    {
+        if (!*p) { --helplong; continue; }
+        fprintf(stdout, "%s\n", *p);
+    }
+    return 1;
+}
+
 int
 main(int argc, char** argv)
 {
-    /* Usage:
-     *   gznonblock portnum[[ --client-fork] 127.0.0.1|serverhost[ message1|--delay[ message2|--delay[...]]]]
-     *
-     * where
-     *            portnum = port number where server will be listening
-     *      --client-fork = directive to run server and fork client
-     *     127...|...host = hostname of server for client to use
-     *   messageN|--delay = client messages to send or delays between them
-     *
-     * Examples:
-     *
-     *   gznonblock 4444
-     *   - Start server only, listening on port 4444
-     *
-     *   gznonblock 4444 srvrhost message1 --delay message2 message3
-     *   - Start client only, connect to server at port 4444 on srvrhost
-     *     - Client
-     *       - sends "message1"
-     *       - delays
-     *       - sends "message2" and "message3"
-     *
-     *   gznonblock 4444 --client-fork 127.0.0.1 msg1 --delay -stopserver-
-     *   - Fork client, connect to server at port 4444 on 127.0.0.1
-     *     - Client
-     *       - delays for server to start (forced when forking client)
-     *       - sends "msg1"
-     *       - delays
-     *       - sends "-stopserver-"
-     *         - which will stop server later
-     *   - Start server, listening on port 4444
-     */
-
     /* Check if "--client-fork" is at argument offset 2 */
     int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
+
+    if (Usage(argc, argv)) { return EXIT_SUCCESS; }
 
     /* If command line is:
      *
