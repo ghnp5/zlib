@@ -81,7 +81,7 @@ staticgznb: gznonblk$(EXE)
 
 check: test
 
-test: all teststatic testshared
+test: all teststatic testshared testgznonblk
 
 teststatic: static
 	@TMPST=tmpst_$$; \
@@ -91,6 +91,13 @@ teststatic: static
 	  echo '		*** zlib test FAILED ***'; false; \
 	fi
 	@rm -f tmpst_$$
+
+testgznonblk: staticgznb
+	@if ./gznonblk 44444 --client-fork 127.0.0.1 first second --delay third --delay -stopserver- ; then \
+	  echo '		*** gznonblk test OK ***'; \
+	else \
+	  echo '		*** gznonblk test FAILED ***'; false; \
+	fi
 
 testshared: shared
 	@LD_LIBRARY_PATH=`pwd`:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
