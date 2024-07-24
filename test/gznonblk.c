@@ -27,25 +27,26 @@ make_fd_nonblocking(int fd)
 
 /* Server code to use gzread.c/zlib.h library:
  * - Listen for, and accept, socket connection(s)
+ * - Make connection non-blocking
  * - select(2), and (gz)read data when available
- * - Exit when <exit/> is received
+ * - Exit when "-stopserver-" is received
  */
 
 int
 servermain(int argc, char** argv)
 {
+    struct addrinfo *rp;                      /* getaddrinfo(3) items */
     struct addrinfo hints;
     struct addrinfo *result;
-    struct addrinfo *rp;
-    int listenfd;
-    int sfd;
-    int rtn;
-    int stopserver = 0;
     struct sockaddr_storage peer_addr;
     socklen_t peerlen = sizeof peer_addr;
-    ssize_t nread;
-    char buf[BUF_SIZE];
-    gzFile gzfi = NULL;
+
+    int rtn;                       /* Return value from many routines */
+    int sfd;     /* Accepted socket file descriptor, for sending data */
+    int listenfd;      /* Bound socket file descriptor, for listening */
+    int stopserver = 0;          /* Flag for when to exit server code */
+    char buf[BUF_SIZE];                       /* Read (gzread) buffer */
+    gzFile gzfi = NULL;                  /* gzread "file" information */
 
     if (argc != 2) {
         fprintf(stderr, "Server usage: %s port\n", argv[0]);
@@ -55,13 +56,13 @@ servermain(int argc, char** argv)
     /* Setup for getaddrinfo(3) call */
 
     memset(&hints, 0, sizeof(hints));
-    //hints.ai_family = AF_UNSPEC;       /* Allow IPv4 or IPv6 */
-    //hints.ai_family = AF_INET6;                      /* IPv6 */
-    hints.ai_family = AF_INET;                         /* IPv4 */
-    hints.ai_socktype = SOCK_STREAM;          /* Stream socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
-    hints.ai_protocol = 0;                     /* Any protocol */
-    hints.ai_canonname = NULL;   /* Server; nobbut else needed */
+    //hints.ai_family = AF_UNSPEC;              /* Allow IPv4 or IPv6 */
+    //hints.ai_family = AF_INET6;                             /* IPv6 */
+    hints.ai_family = AF_INET;                                /* IPv4 */
+    hints.ai_socktype = SOCK_STREAM;                 /* Stream socket */
+    hints.ai_flags = AI_PASSIVE;           /* For wildcard IP address */
+    hints.ai_protocol = 0;                            /* Any protocol */
+    hints.ai_canonname = NULL;          /* Server; nobbut else needed */
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
@@ -70,8 +71,7 @@ servermain(int argc, char** argv)
     if (rtn) {
         fprintf(stderr, "Server %d=getaddrinfo(\"%s\",\"%s\",...)"
                         " failed: %s\n"
-                      , rtn, "<null>", argv[1]
-                      , gai_strerror(rtn)
+                      , rtn, "<null>", argv[1], gai_strerror(rtn)
                );
         return EXIT_FAILURE;
     }
@@ -203,16 +203,16 @@ servermain(int argc, char** argv)
             }
             fprintf(stderr, "%s", "]\n");
 
+            /* If "-stopserver-" was received, then set flag */
             stopserver = (rtn == 12 || (rtn == 13 && !buf[12]))
                       && !strncmp("-stopserver-", buf, 12);
 
             continue;  /* Done with gzread over socket; skip listenfd */
-
         } /* if (gzfi) */
 
         /* To here, there is no active accepted socket; select(2) result
-         * was for bound listining socket, indicating a new connection
-         * request
+         * was for bound listening socket (listenfd), indicating a new
+         * connection request
          */
 
         //not necessary:  if (!FD_ISSET(listenfd, &rfds)) { continue; }
@@ -248,14 +248,18 @@ servermain(int argc, char** argv)
                          , service, NI_MAXSERV, NI_NUMERICSERV);
         if (rtn == 0)
         {
-            fprintf(stderr, "Server accepted connection from %s:%s\n", host, service);
+            fprintf(stderr, "Server accepted connection from %s:%s\n"
+                          , host, service
+                   );
         }
         else
         {
-            fprintf(stderr, "Server getnameinfo failed: %s\n", gai_strerror(rtn));
+            fprintf(stderr, "Server getnameinfo failed: %s\n"
+                          , gai_strerror(rtn)
+                   );
         }
 
-        /* Open/allocate the gzFile, and set its buffer size */
+        /* Allocate/open the gzFile pointer, and set its buffer size */
         if (!(gzfi = gzdopen(sfd, "r")))
         {
             fprintf(stderr, "Server gzdopen(%d, \"r\") failed\n" , sfd);
@@ -276,21 +280,27 @@ servermain(int argc, char** argv)
     return EXIT_SUCCESS;
 }
 
+/* Client code to use gzwrite.c/zlib.h library:
+ * - Open socket connection to server above
+ * - Make connection non-blocking
+ * - gzwrite command-line arguments (argv)
+ * - Exit after last argument has been "gzwritten"
+ */
+
 int
 clientmain(int argc, char** argv)
 {
+    struct addrinfo *rp;                      /* getaddrinfo(3) items */
     struct addrinfo hints;
     struct addrinfo *result;
-    struct addrinfo *rp;
+
+    int rtn;                       /* Return value from many routines */
+    int sfd;                                /* Socket file descriptor */
+    size_t len;                             /* Length of data to send */
+    char* serverhost;           /* Name of server (argv[2] or argv[3] */
+    gzFile gzfi = NULL;                  /* gzread "file" information */
+    int final_rtn = EXIT_SUCCESS;        /* Exit code; assume success */
     int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
-    char* serverhost;
-    int sfd;
-    int rtn;
-    size_t len;
-    ssize_t nread;
-    char buf[BUF_SIZE];
-    gzFile gzfi = NULL;
-    int final_rtn = EXIT_SUCCESS;
 
     if (argc < 3 || (argc == 3 && clientfork))
     {
@@ -301,6 +311,14 @@ clientmain(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    /* Extract server hostname apropo the command line:
+     *
+     *     gznonblk portnumber serverhost ...
+     *
+     * OR
+     *
+     *     gznonblk portnumber --client-fork serverhost ...
+     */
     serverhost = clientfork ? argv[3] : argv[2];
 
     /* Obtain address(es) matching host/port */
@@ -316,13 +334,13 @@ clientmain(int argc, char** argv)
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
+    /* Get server address info:  argv[1] is the port */
     errno = 0;
     rtn = getaddrinfo(serverhost, argv[1], &hints, &result);
     if (rtn) {
         fprintf(stderr, "Client %d=getaddrinfo(\"%s\",\"%s\",...)"
                         " failed: %s\n"
-                      , rtn, serverhost, argv[1]
-                      , gai_strerror(rtn)
+                      , rtn, serverhost, argv[1], gai_strerror(rtn)
                );
         return EXIT_FAILURE;
     }
@@ -352,6 +370,7 @@ clientmain(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    /* Allocate/open the gzFile pointer */
     if (!(gzfi = gzdopen(sfd, "w")))
     {
         fprintf(stderr, "Client gzdopen(%d, \"w\") failed\n" , sfd);
@@ -360,34 +379,27 @@ clientmain(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    /* Send remaining command-line arguments as separate writes */
+    /* Send remaining command-line arguments as separate gzwrites */
 
     for (int iarg = clientfork ? 4 : 3
         ; final_rtn == EXIT_SUCCESS && iarg < argc
         ; ++iarg
         )
     {
-        int itmp;
-        int save_err;
+        int itmp;                        /* Unused value from gzerror */
+        int save_err;                              /* cache for errno */
 
-        len = strlen(argv[iarg]) + 1; /* +1 for terminating null byte */
-
-        if (len > BUF_SIZE)
-        {
-            fprintf(stderr,  "Client Ignoring long message"
-                             " in argument %d\n", iarg
-                   );
-            continue;
-        }
-
-        if (!strcmp(argv[iarg],"--delay"))
+        if (!strcmp(argv[iarg],"--delay"))   /* argument is "--delay" */
         {
             struct timeval tv;
             tv = tvfixed;
-            select(0,NULL,NULL,NULL,&tv);
+            select(0,NULL,NULL,NULL,&tv); /* Delay, then get next arg */
             continue;
         }
 
+        len = strlen(argv[iarg]) + 1; /* +1 for terminating null byte */
+
+        /* Write argument using gzwrite; on error log and exit */
         errno = 0;
         if ((rtn=gzwrite(gzfi, argv[iarg], len)) != len)
         {
@@ -401,6 +413,7 @@ clientmain(int argc, char** argv)
             continue;
         }
 
+        /* Flush data to socket */
         errno = 0;
         if ((rtn=gzflush(gzfi, Z_SYNC_FLUSH)) != Z_OK)
         {
@@ -413,8 +426,11 @@ clientmain(int argc, char** argv)
             final_rtn = EXIT_FAILURE;
             continue;
         }
-    } // for (int iarg = ...; ...; ++iarg)
 
+      /* End of argument loop */
+    } // for (...; final_return == EXIT_SUCCESS ...; ++iarg)
+
+    /* Execute final flush, close socket, return status */
     gzflush(gzfi, Z_FINISH);
     gzclose(gzfi);
 
@@ -455,24 +471,39 @@ main(int argc, char** argv)
      *         - which will stop server later
      *   - Start server, listening on port 4444
      */
+
+    /* Check if "--client-fork" is at argument offset 2 */
     int clientfork = argc > 2 && !strcmp(argv[2], "--client-fork");
 
+    /* If command line is:
+     *
+     *     gznonblk portnum serverhost ...
+     *
+     * then run client only
+     */
     if (argc > 2 && !clientfork) { return clientmain(argc, argv); }
 
+    /* If command line is:
+     *
+     *     gznonblk portnum --clienthost serverhost ...
+     *
+     * then fork client, run server, wait for client
+     */
     errno = 0;
     if (clientfork)
     {
-        int rtn;
-        pid_t pidwaited;
-        int wstat;
-        int wopts = WNOHANG;
-        struct timeval tv = {3, 0};
-        int badchild = 0;
+        int rtn;                   /* Return value from many routines */
+        int wstat;            /* Client return status from waitpid(2) */
+        pid_t pidwaited;              /* Return value from waitpid(2) */
+        int badchild = 0;     /* Non-zero flag for any client failure */
+        int wopts = WNOHANG;                /* Options for waitpid(2) */
+        struct timeval tv = {3, 0};    /* Delay 3s for client to exit */
 
-        pid_t pidforked = fork();
+        pid_t pidforked = fork();                  /* Fork the client */
 
-        int save_err = errno;
+        int save_err = errno;              /* Save the fork(2) result */
 
+        /* On fork(2) error, log and exit */
         if (pidforked < 0)
         {
             fprintf(stderr, "Server %d=fork() of client failed"
@@ -482,7 +513,7 @@ main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        /* Child runs client and exits */
+        /* If this is now forked child, then run client and exit */
         if (!pidforked) { return clientmain(argc, argv); }
 
         /* To here, this is the server */
@@ -492,9 +523,9 @@ main(int argc, char** argv)
                );
 
         rtn = servermain(2, argv);                      /* Run server */
-        select(0, NULL, NULL, NULL, &tv);           /* Wait for child */
+        select(0, NULL, NULL, NULL, &tv); /* Delay for client to exit */
         errno = 0;
-        pidwaited = waitpid(-1, &wstat, wopts);   /* Get child status */
+        pidwaited = waitpid(-1, &wstat, wopts);  /* Get client status */
 
         if (pidwaited < 1)        /* Non-positive return is a failure */
         {
@@ -520,7 +551,13 @@ main(int argc, char** argv)
         return rtn | (WIFEXITED(wstat) ? WEXITSTATUS(wstat) : 1);
     }
 
-    /* Run server only */
+    /* If command line is:
+     *
+     *     gznonblk portnum
+     *
+     * then run server only
+     */
     if (argc == 2) { return servermain(2, argv); }
+
     return -1;
 }
