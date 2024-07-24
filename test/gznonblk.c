@@ -49,7 +49,7 @@ servermain(int argc, char** argv)
     gzFile gzfi = NULL;                  /* gzread "file" information */
 
     if (argc != 2) {
-        fprintf(stderr, "Server usage: %s port\n", argv[0]);
+        fprintf(stderr, "Server usage: %s port|service\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -304,7 +304,7 @@ clientmain(int argc, char** argv)
 
     if (argc < 3 || (argc == 3 && clientfork))
     {
-        fprintf(stderr, "Client usage: %s <port>%s"
+        fprintf(stderr, "Client usage: %s port|service%s"
                         " serverhost msg...\n"
                       , argv[0], clientfork ? " --client-fork" : ""
                );
@@ -442,9 +442,10 @@ int Usage(int argc, char** argv)
     const char* arrUsage[] =
     { "Usage:"
     , "  gznonblk pn[[ --client-fork] srvrhost[ msg1|--delay[ msg2...]]]"
+    , "  gznonblk --help[-long]"
     , ""
     , "where"
-    , "            pn = port number where server will be listening"
+    , "            pn = port# or service where server will be listening"
     , " --client-fork = directive to run server and fork client"
     , "      srvrhost = hostname of server for client to use"
     , "  msgN|--delay = client messages to send or delays between them"
