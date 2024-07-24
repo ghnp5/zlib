@@ -257,6 +257,8 @@ void push_attr(struct attr_item **list,char *fname,int mode,time_t time)
   if (item == NULL)
     error("Out of memory");
   item->fname = strdup(fname);
+  if (item->fname == NULL)
+    error("Out of memory");
   item->mode  = mode;
   item->time  = time;
   item->next  = *list;
@@ -330,6 +332,10 @@ int makedir (char *newdir)
   char *p;
   int  len = strlen(buffer);
 
+  if (buffer == NULL) {
+    fprintf(stderr,"%s: Out of memory\n",prog);
+    return 1;
+  }
   if (len <= 0) {
     free(buffer);
     return 0;
