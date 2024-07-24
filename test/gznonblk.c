@@ -1,3 +1,8 @@
+/* gznonblk.c -- test non-blocking reads w/zlib compression library
+ * Copyright (C) 2024 Brian T. Carcich
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ */
+
 #include <zlib.h>
 #include <fcntl.h>
 #include <netdb.h>
