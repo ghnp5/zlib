@@ -101,6 +101,7 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
     state = (gz_statep)malloc(sizeof(gz_state));
     if (state == NULL)
         return NULL;
+    memset(state, 0, sizeof(gz_state));
     state->size = 0;            /* no buffers allocated yet */
     state->want = GZBUFSIZE;    /* requested buffer size */
     state->msg = NULL;          /* no error message yet */
