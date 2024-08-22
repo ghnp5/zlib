@@ -13,13 +13,13 @@ the library is working correctly.  Another example is given in the file
 test/minigzip.c.  The compression library itself is composed of all source
 files in the root directory.
 
-To compile all files and run the test program, follow this instructions:
+To compile all files, run the tests, and install the libray follow this
+instructions:
 
-  mkdir build && cd build
-  cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
-  cmake --build .
-  ctest
-  cmake --install . --prefix /tmp/zlib
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+  cmake --build build
+  cmake --build build --target test
+  cmake --install build --prefix /tmp/zlib
 
 Tip: Try cmake --help to see all available generators on your system.
 
