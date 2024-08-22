@@ -19,7 +19,7 @@ To compile all files and run the test program, follow this instructions:
   cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
   cmake --build .
   ctest
-  DESTDIR=/tmp/zlib/ cmake --build . --target install
+  cmake --install . --prefix /tmp/zlib
 
 Tip: Try cmake --help to see all available generators on your system.
 
