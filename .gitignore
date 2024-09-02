@@ -20,6 +20,7 @@
 /minigzip
 /minigzip64
 /minigzipsh
+/gznonblk
 /zlib.pc
 /configure.log
 /build

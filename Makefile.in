@@ -77,11 +77,13 @@ shared: examplesh$(EXE) minigzipsh$(EXE)
 
 all64: example64$(EXE) minigzip64$(EXE)
 
+staticgznb: gznonblk$(EXE)
+
 check: test
 
 test: all teststatic testshared
 
-teststatic: static
+teststatic: static testgznonblk
 	@TMPST=tmpst_$$; \
 	if echo hello world | ${QEMU_RUN} ./minigzip | ${QEMU_RUN} ./minigzip -d && ${QEMU_RUN} ./example $$TMPST ; then \
 	  echo '		*** zlib test OK ***'; \
@@ -89,6 +91,13 @@ teststatic: static
 	  echo '		*** zlib test FAILED ***'; false; \
 	fi
 	@rm -f tmpst_$$
+
+testgznonblk: staticgznb
+	@if ./gznonblk 44444 --client-fork 127.0.0.1 first second --delay third --delay -stopserver- ; then \
+	  echo '		*** gznonblk test OK ***'; \
+	else \
+	  echo '		*** gznonblk test FAILED ***'; false; \
+	fi
 
 testshared: shared
 	@LD_LIBRARY_PATH=`pwd`:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
@@ -144,6 +153,9 @@ example.o: $(SRCDIR)test/example.c $(SRCDIR)zlib.h zconf.h
 
 minigzip.o: $(SRCDIR)test/minigzip.c $(SRCDIR)zlib.h zconf.h
 	$(CC) $(CFLAGS) $(ZINCOUT) -c -o $@ $(SRCDIR)test/minigzip.c
+
+gznonblk.o: $(SRCDIR)test/gznonblk.c $(SRCDIR)zlib.h zconf.h
+	$(CC) $(CFLAGS) $(ZINCOUT) -c -o $@ $(SRCDIR)test/gznonblk.c
 
 example64.o: $(SRCDIR)test/example.c $(SRCDIR)zlib.h zconf.h
 	$(CC) $(CFLAGS) $(ZINCOUT) -D_FILE_OFFSET_BITS=64 -c -o $@ $(SRCDIR)test/example.c
@@ -287,6 +299,9 @@ example$(EXE): example.o $(STATICLIB)
 minigzip$(EXE): minigzip.o $(STATICLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ minigzip.o $(TEST_LIBS)
 
+gznonblk$(EXE): gznonblk.o $(STATICLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ gznonblk.o $(TEST_LIBS)
+
 examplesh$(EXE): example.o $(SHAREDLIBV)
 	$(CC) $(CFLAGS) -o $@ example.o $(LDFLAGS) -L. $(SHAREDLIBV)
 
@@ -370,6 +385,7 @@ clean: minizip-clean
 	rm -f *.o *.lo *~ \
 	   example$(EXE) minigzip$(EXE) examplesh$(EXE) minigzipsh$(EXE) \
 	   example64$(EXE) minigzip64$(EXE) \
+	   gznonblk$(EXE) \
 	   infcover \
 	   libz.* foo.gz so_locations \
 	   _match.s maketree contrib/infback9/*.o
@@ -393,6 +409,7 @@ adler32.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
 zutil.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
 gzclose.o gzlib.o gzread.o gzwrite.o: $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
 compress.o example.o minigzip.o uncompr.o: $(SRCDIR)zlib.h zconf.h
+gznonblk.o: $(SRCDIR)zlib.h zconf.h
 crc32.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)crc32.h
 deflate.o: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
 infback.o inflate.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h $(SRCDIR)inffixed.h
@@ -404,6 +421,7 @@ adler32.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
 zutil.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
 gzclose.lo gzlib.lo gzread.lo gzwrite.lo: $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
 compress.lo example.lo minigzip.lo uncompr.lo: $(SRCDIR)zlib.h zconf.h
+gznonblk.lo: $(SRCDIR)zlib.h zconf.h
 crc32.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)crc32.h
 deflate.lo: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
 infback.lo inflate.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h $(SRCDIR)inffixed.h

@@ -24,7 +24,7 @@ local int gz_load(gz_statep state, unsigned char *buf, unsigned len,
             break;
         *have += (unsigned)ret;
     } while (*have < len);
-    if (ret < 0) {
+    if (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         gz_error(state, Z_ERRNO, zstrerror());
         return -1;
     }
@@ -268,6 +268,7 @@ local int gz_skip(gz_statep state, z_off64_t len) {
 local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     z_size_t got;
     unsigned n;
+    int load_errno;
 
     /* if len is zero, avoid unnecessary operations */
     if (len == 0)
@@ -283,6 +284,7 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     /* get len bytes to buf, or less than len if at the end */
     got = 0;
     do {
+        load_errno = 0;
         /* set n to the maximum amount of len that fits in an unsigned int */
         n = (unsigned)-1;
         if (n > len)
@@ -307,8 +309,10 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
            buffer */
         else if (state->how == LOOK || n < (state->size << 1)) {
             /* get more output, looking for header if required */
+            errno = 0;
             if (gz_fetch(state) == -1)
                 return 0;
+            if (!state->x.have) { load_errno = errno; }
             continue;       /* no progress yet -- go back to copy above */
             /* the copy above assures that we will leave with space in the
                output buffer, allowing at least one gzungetc() to succeed */
@@ -316,16 +320,20 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
 
         /* large len -- read directly into user buffer */
         else if (state->how == COPY) {      /* read directly */
+            errno = 0;
             if (gz_load(state, (unsigned char *)buf, n, &n) == -1)
                 return 0;
+            load_errno = errno;
         }
 
         /* large len -- decompress directly into user buffer */
         else {  /* state->how == GZIP */
             state->strm.avail_out = n;
             state->strm.next_out = (unsigned char *)buf;
+            errno = 0;
             if (gz_decomp(state) == -1)
                 return 0;
+            load_errno = errno;
             n = state->x.have;
             state->x.have = 0;
         }
@@ -335,7 +343,7 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
         buf = (char *)buf + n;
         got += n;
         state->x.pos += n;
-    } while (len);
+    } while (len && load_errno != EAGAIN && load_errno != EWOULDBLOCK);
 
     /* return number of bytes read into user buffer */
     return got;
