@@ -28,10 +28,10 @@
 .vs
 *.user
 *.nupkg
-contrib/vstudio/vc143/x86
-contrib/vstudio/vc143/x64
-contrib/vstudio/vc143/arm
-contrib/vstudio/vc143/arm64
+contrib/vstudio/vc17/x86
+contrib/vstudio/vc17/x64
+contrib/vstudio/vc17/arm
+contrib/vstudio/vc17/arm64
 contrib/nuget/bin
 contrib/nuget/obj
 *.included
