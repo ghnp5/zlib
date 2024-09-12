@@ -713,7 +713,7 @@ int ZEXPORT deflateSetHeader(z_streamp strm, gz_headerp head) {
 int ZEXPORT deflatePending(z_streamp strm, unsigned *pending, int *bits) {
     if (deflateStateCheck(strm)) return Z_STREAM_ERROR;
     if (pending != Z_NULL)
-        *pending = strm->state->pending;
+        *pending = (unsigned)strm->state->pending;
     if (bits != Z_NULL)
         *bits = strm->state->bi_valid;
     return Z_OK;
@@ -925,7 +925,7 @@ local void flush_pending(z_streamp strm) {
     deflate_state *s = strm->state;
 
     _tr_flush_bits(s);
-    len = s->pending;
+    len = (unsigned)s->pending;
     if (len > strm->avail_out) len = strm->avail_out;
     if (len == 0) return;
 
@@ -947,7 +947,7 @@ local void flush_pending(z_streamp strm) {
     do { \
         if (s->gzhead->hcrc && s->pending > (beg)) \
             strm->adler = crc32(strm->adler, s->pending_buf + (beg), \
-                                s->pending - (beg)); \
+                                (unsigned)s->pending - (beg)); \
     } while (0)
 
 /* ========================================================================= */
@@ -1082,7 +1082,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
             }
             if (s->gzhead->hcrc)
                 strm->adler = crc32(strm->adler, s->pending_buf,
-                                    s->pending);
+                                    (unsigned)s->pending);
             s->gzindex = 0;
             s->status = EXTRA_STATE;
         }
@@ -1090,13 +1090,13 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
     if (s->status == EXTRA_STATE) {
         if (s->gzhead->extra != Z_NULL) {
             ulg beg = s->pending;   /* start of bytes to update crc */
-            uInt left = (s->gzhead->extra_len & 0xffff) - s->gzindex;
+            uInt left = (s->gzhead->extra_len & 0xffff) - (unsigned)s->gzindex;
             while (s->pending + left > s->pending_buf_size) {
-                uInt copy = s->pending_buf_size - s->pending;
+                uInt copy = (unsigned)(s->pending_buf_size - s->pending);
                 zmemcpy(s->pending_buf + s->pending,
                         s->gzhead->extra + s->gzindex, copy);
                 s->pending = s->pending_buf_size;
-                HCRC_UPDATE(beg);
+                HCRC_UPDATE((unsigned)beg);
                 s->gzindex += copy;
                 flush_pending(strm);
                 if (s->pending != 0) {
@@ -1109,7 +1109,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
             zmemcpy(s->pending_buf + s->pending,
                     s->gzhead->extra + s->gzindex, left);
             s->pending += left;
-            HCRC_UPDATE(beg);
+            HCRC_UPDATE((unsigned)beg);
             s->gzindex = 0;
         }
         s->status = NAME_STATE;
@@ -1120,7 +1120,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
             int val;
             do {
                 if (s->pending == s->pending_buf_size) {
-                    HCRC_UPDATE(beg);
+                    HCRC_UPDATE((unsigned)beg);
                     flush_pending(strm);
                     if (s->pending != 0) {
                         s->last_flush = -1;
@@ -1131,7 +1131,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
                 val = s->gzhead->name[s->gzindex++];
                 put_byte(s, val);
             } while (val != 0);
-            HCRC_UPDATE(beg);
+            HCRC_UPDATE((unsigned)beg);
             s->gzindex = 0;
         }
         s->status = COMMENT_STATE;
@@ -1142,7 +1142,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
             int val;
             do {
                 if (s->pending == s->pending_buf_size) {
-                    HCRC_UPDATE(beg);
+                    HCRC_UPDATE((unsigned)beg);
                     flush_pending(strm);
                     if (s->pending != 0) {
                         s->last_flush = -1;
@@ -1153,7 +1153,7 @@ int ZEXPORT deflate(z_streamp strm, int flush) {
                 val = s->gzhead->comment[s->gzindex++];
                 put_byte(s, val);
             } while (val != 0);
-            HCRC_UPDATE(beg);
+            HCRC_UPDATE((unsigned)beg);
         }
         s->status = HCRC_STATE;
     }
@@ -1637,7 +1637,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
      * this is 32K. This can be as small as 507 bytes for memLevel == 1. For
      * large input and output buffers, the stored block size will be larger.
      */
-    unsigned min_block = MIN(s->pending_buf_size - 5, s->w_size);
+    unsigned min_block = MIN((unsigned)s->pending_buf_size - 5, s->w_size);
 
     /* Copy as many min_block or larger stored blocks directly to next_out as
      * possible. If flushing, copy the remaining available input to next_out as
@@ -1657,7 +1657,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
             break;
             /* maximum stored block length that will fit in avail_out: */
         have = s->strm->avail_out - have;
-        left = s->strstart - s->block_start;    /* bytes left in window */
+        left = s->strstart - (unsigned)s->block_start;    /* bytes left in window */
         if (len > (ulg)left + s->strm->avail_in)
             len = left + s->strm->avail_in;     /* limit len to the input */
         if (len > have)
@@ -1765,7 +1765,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
         return block_done;
 
     /* Fill the window with any remaining input. */
-    have = s->window_size - s->strstart;
+    have = (unsigned)s->window_size - s->strstart;
     if (s->strm->avail_in > have && s->block_start >= (long)s->w_size) {
         /* Slide the window down. */
         s->block_start -= s->w_size;
@@ -1794,9 +1794,9 @@ local block_state deflate_stored(deflate_state *s, int flush) {
      */
     have = (s->bi_valid + 42) >> 3;         /* number of header bytes */
         /* maximum stored block length that will fit in pending: */
-    have = MIN(s->pending_buf_size - have, MAX_STORED);
+    have = MIN((unsigned)s->pending_buf_size - have, MAX_STORED);
     min_block = MIN(have, s->w_size);
-    left = s->strstart - s->block_start;
+    left = s->strstart - (unsigned)s->block_start;
     if (left >= min_block ||
         ((left || flush == Z_FINISH) && flush != Z_NO_FLUSH &&
          s->strm->avail_in == 0 && left <= have)) {
